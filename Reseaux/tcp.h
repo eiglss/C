@@ -1,8 +1,8 @@
 /******************************************************************************/
-/*        @TITRE : udp.h                                                      */
-/*      @VERSION : 0                                                          */
+/*        @TITRE : tcp.h                                                      */
+/*      @VERSION : 1                                                          */
 /*     @CREATION : august 16, 2016                                            */
-/* @MODIFICATION :                                                            */
+/* @MODIFICATION : august 18, 2017                                            */
 /*      @AUTEURS : Enzo IGLESIS                                               */
 /*    @COPYRIGHT : Copyright (c) 2016 Enzo IGLESIS                            */
 /*      @LICENSE : MIT License (MIT)                                          */
@@ -12,42 +12,32 @@
 
 /*******************************    LIBRARYS    *******************************/
 #include <netinet/in.h> /* constantes et structures propes au domaine INTERNET*/
+#include <stdint.h>
 
 /*******************************     TYPES      *******************************/
-typedef struct
+typedef struct tcp_t
 {
-    unsigned short int port;
-    int socket;
-    struct sockaddr_in socket_addr;
-}
-tcp_in_t;
-
-typedef struct
-{
+    /* variables */
     char * host;
-    unsigned short int port;
+    uint16_t port;
     int socket;
-    struct sockaddr_in socket_addr;
-}
-tcp_out_t;
-
-
-typedef struct
-{
-    tcp_in_t in;
-    tcp_out_t out;
+    struct sockaddr_in sockaddr;
+    /* functions */
+    int (* connect)(struct tcp_t * tcp);
+    int (* accept)(struct tcp_t * tcp);
+    ssize_t (* write)(struct tcp_t * tcp, char * data, size_t length);
+    ssize_t (* read)(struct tcp_t * tcp, char * data, size_t length);
+    int (* close)(struct tcp_t * tcp);
 }
 tcp_t;
 
 /*******************************   FUNCTIONS    *******************************/
-int init_input_tcp_connection(tcp_in_t * tcp_in, unsigned short int port);
-int init_output_tcp_connection(tcp_out_t * tcp_out, unsigned short int port, char * host);
-int init_tcp_connection(tcp_t * tcp, unsigned short int in_port, unsigned short int out_port, char * host);
-int tcp_output_connection(tcp_out_t * tcp_out);
-int tcp_input_connection(tcp_in_t * tcp_in);
-ssize_t send_data_tcp(tcp_out_t  tcp_out, char * data, size_t data_length);
-ssize_t receive_data_tcp(tcp_in_t tcp_in, char * data, size_t data_length);
-int close_input_tcp_connection(tcp_in_t tcp_in);
-int close_input_tcp_connection(tcp_out_t tcp_out);
+int tcp_initialize_server(tcp_t * tcp, uint16_t port);
+int tcp_initialize_client(tcp_t * tcp, uint16_t port, char * host);
+int tcp_connect(tcp_t * tcp);
+int tcp_accept(tcp_t * tcp);
+ssize_t tcp_write(tcp_t * tcp, char * data, size_t length);
+ssize_t tcp_read(tcp_t * tcp, char * data, size_t length);
+int tcp_close(tcp_t * tcp);
 
 #endif

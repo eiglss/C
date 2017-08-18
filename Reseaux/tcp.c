@@ -1,8 +1,8 @@
 /******************************************************************************/
 /*        @TITRE : tcp.c                                                      */
-/*      @VERSION : 0                                                          */
+/*      @VERSION : 1                                                          */
 /*     @CREATION : august 18, 2016                                            */
-/* @MODIFICATION :                                                            */
+/* @MODIFICATION : august 18, 2017                                            */
 /*      @AUTEURS : Enzo IGLESIS                                               */
 /*    @COPYRIGHT : Copyright (c) 2016 Enzo IGLESIS                            */
 /*      @LICENSE : MIT License (MIT)                                          */
@@ -30,92 +30,87 @@ base de données du reseau */
 /*******************************    VARIABLES   *******************************/
 
 /*******************************   FUNCTIONS    *******************************/
-int init_input_tcp_connection(tcp_in_t * tcp_in, unsigned short int port)
+static void tcp_initialize_struct(tcp_t * tcp)
 {
-    tcp_in->port = port;
-    tcp_in->socket_addr.sin_family = AF_INET; /* pour le domaine INTERNET */
-    tcp_in->socket_addr.sin_port = tcp_in->port; /* numero de port */
-    memset(tcp_in->socket_addr.sin_zero, '\0', 8); /* mise a zero */
-    if((tcp_in->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) != -1)
+    tcp->connect = tcp_connect;
+    tcp->accept = tcp_accept;
+    tcp->write = tcp_write;
+    tcp->read = tcp_read;
+    tcp->close = tcp_close;
+}
+
+int tcp_initialize_server(tcp_t * tcp, uint16_t port)
+{
+    tcp_initialize_struct(tcp);
+    tcp->port = port;
+    tcp->sockaddr.sin_family = AF_INET;
+    tcp->sockaddr.sin_port = htons(port);
+    tcp->sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    memset(tcp->sockaddr.sin_zero, '\0', 8);
+    if((tcp->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) != -1)
     {
-        return bind(tcp_in->socket, (struct sockaddr * )&tcp_in->socket_addr, sizeof(tcp_in->socket_addr));
+        return bind(tcp->socket, (struct sockaddr *)&tcp->sockaddr, sizeof(tcp->sockaddr));
     }
     return -1;
 }
 
-int init_output_tcp_connection(tcp_out_t * tcp_out, unsigned short int port, char * host)
+int tcp_initialize_client(tcp_t * tcp, uint16_t port, char * host)
 {
     /* local declarations */
     struct hostent * hp;
     /* program statement */
-    tcp_out->port = port;
-    tcp_out->host = host;
-    tcp_out->socket_addr.sin_family = AF_INET; /* pour le domaine INTERNET */
-    tcp_out->socket_addr.sin_port = tcp_out->port; /* numero de port */
-    if((hp = gethostbyname(tcp_out->host)) == NULL)
+    tcp_initialize_struct(tcp);
+    tcp->port = port;
+    tcp->host = host;
+    tcp->sockaddr.sin_family = AF_INET; /* pour le domaine INTERNET */
+    tcp->sockaddr.sin_port = htons(port); /* numero de port */
+    if((hp = gethostbyname(host)) == NULL)
     {
         return -1;
     }
-    memcpy((char *)&(tcp_out->socket_addr.sin_addr.s_addr), hp->h_addr, hp->h_length);
-    memset(tcp_out->socket_addr.sin_zero, '\0', 8); /* mise a zero */
-    tcp_out->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    return tcp_out->socket;
+    memcpy((char *)&(tcp->sockaddr.sin_addr.s_addr), hp->h_addr, hp->h_length);
+    memset(tcp->sockaddr.sin_zero, '\0', 8); /* mise a zero */
+    tcp->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    return 0;
 }
 
-int init_tcp_connection(tcp_t * tcp, unsigned short int in_port, unsigned short int out_port, char * host)
+int tcp_connect(tcp_t * tcp)
 {
-    if(init_input_tcp_connection(&tcp->tcp_in, in_port) != -1)
-    {
-        return init_output_tcp_connection(&tcp->tcp_out, out_port, host);
-    }
-    return -1;
+    return connect(tcp->socket, (struct sockaddr * )&tcp->sockaddr, sizeof(tcp->sockaddr));
 }
 
-int tcp_output_connection(tcp_out_t * tcp_out)
-{
-    return connect(tcp_out->socket, (struct sockaddr * )&tcp_out->socket_addr, sizeof(tcp_out->socket_addr));
-}
-
-int tcp_input_connection(tcp_in_t * tcp_in)
+int tcp_accept(tcp_t * tcp)
 {
     /* local declaration  */
-    int new_socket;
     struct sockaddr_in padr_client;
     int lg = sizeof(padr_client);
+    int temp;
     /* program statement */
-    if((new_socket = accept(tcp_in->socket, (struct sockaddr *)(&padr_client), (socklen_t *)(&lg))) == -1)
+    temp = tcp->socket;
+    listen(tcp->socket, 1);
+    if((tcp->socket = accept(tcp->socket, (struct sockaddr *)(&padr_client), (socklen_t *)(&lg))) == -1)
     {
         return -1;
     }
-    close(tcp_in->socket);
-    listen(new_socket, 1);
-    return tcp_in->socket = new_socket;
+    close(temp);
+    return 0;
 }
 
-ssize_t send_data_tcp(tcp_out_t  tcp_out, char * data, size_t data_length)
+ssize_t tcp_write(tcp_t * tcp, char * data, size_t length)
 {
-    return  write(tcp_out.socket, data, data_length);
+    return  write(tcp->socket, data, length);
 }
 
-ssize_t receive_data_tcp(tcp_in_t tcp_in, char * data, size_t data_length)
+ssize_t tcp_read(tcp_t * tcp, char * data, size_t length)
 {
-    return read(tcp_in.socket, data, data_length);
+    return read(tcp->socket, data, length);
 }
 
-int close_input_tcp_connection(tcp_in_t tcp_in)
+int tcp_close(tcp_t * tcp)
 {
-    if(shutdown(tcp_in.socket, SHUT_RDWR) != -1)
+    if(shutdown(tcp->socket, SHUT_RDWR) != -1)
     {
-        return close(tcp_in.socket);
-    }
-    return -1;
-}
-
-int close_input_tcp_connection(tcp_out_t tcp_out)
-{
-    if(shutdown(tcp_out.socket, SHUT_RDWR) != -1)
-    {
-        return close(tcp_out.socket);
+        return close(tcp->socket);
     }
     return -1;
 }
